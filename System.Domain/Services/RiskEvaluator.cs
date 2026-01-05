@@ -7,8 +7,6 @@ public class RiskEvaluator : IRiskEvaluator
 {
     public bool IsCraCompliant(List<Vulnerability> vulnerabilities)
     {
-        // CRA Rule:
-        // No Critical vulnerabilities with available fixes allowed in production
         var violations = vulnerabilities
             .Where(v => v.Severity == "Critical" && v.FixAvailable)
             .ToList();

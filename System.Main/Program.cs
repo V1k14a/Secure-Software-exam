@@ -19,7 +19,7 @@ var reporter = serviceProvider.GetRequiredService<ReportGenerator>();
 var report = scanner.Scan(Directory.GetCurrentDirectory());
 bool isCompliant = evaluator.IsCraCompliant(report.Vulnerabilities);
 
-reporter.Generate(report, isCompliant);
+reporter.Generate(report.Vulnerabilities, isCompliant);
 
 // Exit code = CRA decision
 return isCompliant ? 0 : 1;
