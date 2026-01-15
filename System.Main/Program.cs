@@ -12,29 +12,26 @@ IConfiguration config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .Build();
 
-// 1. Configure Dependency Injection
 var serviceProvider = new ServiceCollection()
     .AddSingleton<IConfiguration>(config)
-    .AddSingleton<IScanner, GrypeRunner>() // Infra
-    .AddSingleton<ISecurityRepository, SqliteRepository>() // Infra
-    .AddSingleton<IVulnerabilityPersistenceService, VulnerabilityPersistenceService>() // Domain
-    .AddSingleton<IRiskEvaluator, RiskEvaluator>() // Domain
-    .AddSingleton<ReportGenerator>() // Domain
+    .AddSingleton<IScanner, GrypeRunner>()
+    .AddSingleton<ISecurityRepository, SqliteRepository>()
+    .AddSingleton<IVulnerabilityPersistenceService, VulnerabilityPersistenceService>()
+    .AddSingleton<IRiskEvaluator, RiskEvaluator>()
+    .AddSingleton<ReportGenerator>()
     .BuildServiceProvider();
 
-// 2. Start Application
-Console.WriteLine(">>> CRA DEPENDENCY SENTINEL v1.0 <<<");
+Console.WriteLine(">>> CRA DEPENDENCY SENTINEL v1.1 (Integrity Enabled) <<<");
 
 var evaluator = serviceProvider.GetRequiredService<IRiskEvaluator>();
 var reporter = serviceProvider.GetRequiredService<ReportGenerator>();
+var persistence = serviceProvider.GetRequiredService<IVulnerabilityPersistenceService>();
 
-// SET TO TRUE TO TEST THREAT MODELING LOGIC
 bool simulationMode = true; 
 List<Vulnerability> vulnerabilities;
 
 if (simulationMode)
 {
-    Console.WriteLine("[TEST] Running Threat-Modeling Simulation...");
     vulnerabilities = new List<Vulnerability>
     {
         new Vulnerability
@@ -42,22 +39,38 @@ if (simulationMode)
             Id = "CVE-2026-TEST",
             Package = "Microsoft.AspNetCore.Server.Kestrel",
             Severity = "High",
+            Hash = "SHA256-TAMPERED-HASH-666", 
             FixAvailable = true,
-            FirstDiscovered = DateTime.Now.AddDays(-5), // Older than 24h
-            ComponentZone = TrustZone.InternetFacing    // HIGH RISK ZONE
+            FirstDiscovered = DateTime.Now.AddDays(-5),
+            ComponentZone = TrustZone.InternetFacing 
         }
     };
 }
 else
 {
     var scanner = serviceProvider.GetRequiredService<IScanner>();
-    var report = scanner.Scan(Directory.GetCurrentDirectory());
-    vulnerabilities = report.Vulnerabilities.ToList();
+    vulnerabilities = scanner.Scan(Directory.GetCurrentDirectory()).Vulnerabilities.ToList();
 }
 
-// 3. Process and Report
+// W40: Integrity Gatekeeper
+bool integrityPassed = true;
+foreach (var v in vulnerabilities)
+{
+    if (!persistence.CheckIntegrity(v.Package, v.Hash))
+    {
+        integrityPassed = false;
+    }
+}
+
+if (!integrityPassed)
+{
+    Console.WriteLine("\n[HALT] Critical Error: Supply Chain Tampering Detected.");
+    return 1;
+}
+
+// Process and Report
+persistence.EnrichVulnerabilitiesWithHistory(vulnerabilities);
 bool isCompliant = evaluator.IsCraCompliant(vulnerabilities);
 reporter.Generate(vulnerabilities, isCompliant);
 
-// Exit code = CRA decision
 return isCompliant ? 0 : 1;

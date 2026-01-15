@@ -1,5 +1,30 @@
-bin/
-obj/
-/packages/
-riderModule.iml
-/_ReSharper.Caches/
+## [.NET Core / C#]
+# Compiled output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# SQLite Databases (Don't upload your local scan history)
+*.db
+*.db-shm
+*.db-wal
+
+# Rider / IDE specific
+.idea/
+*.sln.iml
+*.user
+*.suo
+*.userosscache
+*.sln.doccache
+
+# Configuration (Don't upload local paths/secrets)
+# Un-comment the line below if you want to keep appsettings local only
+# appsettings.json
+
+# Reports
+# Keep the template but maybe ignore the specific generated results
+# CRA_Compliance_Report.md
+
+# OS specific
+.DS_Store
+Thumbs.db
