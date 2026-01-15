@@ -1,0 +1,8 @@
+﻿{
+  "InternetFacingPackages": [
+    "Kestrel",
+    "Newtonsoft.Json",
+    "Nginx.Controller",
+    "PublicAPI.Client"
+  ]
+}

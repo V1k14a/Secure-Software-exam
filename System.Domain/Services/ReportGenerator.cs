@@ -7,11 +7,13 @@ public class ReportGenerator
 {
     public void Generate(IEnumerable<Vulnerability> vulnerabilities, bool compliant)
     {
-        Console.WriteLine("\n" + new string('=', 40));
-        Console.WriteLine("        CRA SECURITY AUDIT REPORT");
-        Console.WriteLine(new string('=', 40));
+        var vulnList = vulnerabilities.ToList();
+        
+        Console.WriteLine("\n" + new string('=', 60));
+        Console.WriteLine("        CRA SECURITY AUDIT: TERMINAL DASHBOARD");
+        Console.WriteLine(new string('=', 60));
 
-        if (!vulnerabilities.Any())
+        if (!vulnList.Any())
         {
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("  [OK] No vulnerabilities found.");
@@ -19,49 +21,78 @@ public class ReportGenerator
         }
         else
         {
-            foreach (var v in vulnerabilities)
+            foreach (var v in vulnList)
             {
-                if (v.Severity == "Critical" || v.AgeInDays > 2) Console.ForegroundColor = ConsoleColor.Yellow;
-                
-                string slaStatus = v.AgeInDays > 2 ? "!!! SLA EXPIRED !!!" : "Within SLA";
-                
-                Console.WriteLine($"- [{v.Severity.ToUpper()}] {v.Id}");
-                Console.WriteLine($"  Package: {v.Package} | Fix: {v.FixAvailable}");
-                Console.WriteLine($"  Age: {v.AgeInDays} days ({slaStatus})");
-                Console.WriteLine(new string('-', 30));
+                ApplyConsoleColor(v);
+                string zoneLabel = v.ComponentZone == TrustZone.InternetFacing ? "[!] INTERNET-FACING" : "[i] Internal";
+                Console.WriteLine($"- [{v.Severity.ToUpper()}] {v.Id} | {zoneLabel}");
                 Console.ResetColor();
             }
-        }
+            
+            Console.WriteLine("\nDETAILED EVIDENCE TABLE:");
+            string tableHeader = string.Format("| {0,-15} | {1,-10} | {2,-15} | {3,-10} |", "ID", "Severity", "Zone", "Age");
+            Console.WriteLine(new string('-', tableHeader.Length));
+            Console.WriteLine(tableHeader);
+            Console.WriteLine(new string('-', tableHeader.Length));
 
+            foreach (var v in vulnList)
+            {
+                Console.WriteLine("| {0,-15} | {1,-10} | {2,-15} | {3,-10} |", 
+                    v.Id, v.Severity, v.ComponentZone, v.AgeInDays + " days");
+            }
+            Console.WriteLine(new string('-', tableHeader.Length));
+        }
+        
         Console.WriteLine("\n=== CRA COMPLIANCE RESULT ===");
         Console.ForegroundColor = compliant ? ConsoleColor.Green : ConsoleColor.Red;
         Console.WriteLine(compliant ? ">>> STATUS: PASS ✅" : ">>> STATUS: FAIL ❌");
         Console.ResetColor();
-        Console.WriteLine(new string('=', 40));
+        Console.WriteLine(new string('=', 60));
         
-        GenerateMarkdownReport(vulnerabilities, compliant);
+        GenerateMarkdownReport(vulnList, compliant);
     }
 
-    private void GenerateMarkdownReport(IEnumerable<Vulnerability> vulns, bool compliant)
+    private void ApplyConsoleColor(Vulnerability v)
+    {
+        if (v.ComponentZone == TrustZone.InternetFacing && (v.Severity == "Critical" || v.Severity == "High"))
+        {
+            Console.BackgroundColor = ConsoleColor.DarkMagenta;
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+        else if (v.Severity == "Critical" || v.AgeInDays > 2)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+        }
+    }
+
+    private void GenerateMarkdownReport(List<Vulnerability> vulns, bool compliant)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Cyber Resilience Act (CRA) Compliance Report");
         sb.AppendLine($"**Generated:** {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine($"**Final Verdict:** {(compliant ? "PASS" : "FAIL")}");
-        sb.AppendLine("\n## Summary");
-        sb.AppendLine($"- Total Components Scanned: (Calculated from SBOM)");
-        sb.AppendLine($"- Total Vulnerabilities Found: {vulns.Count()}");
         
-        sb.AppendLine("\n## Detailed Vulnerability List");
-        sb.AppendLine("| ID | Severity | Package | Fix Available | Age (Days) |");
-        sb.AppendLine("|----|----------|---------|---------------|------------|");
+        sb.AppendLine("\n## Summary");
+        sb.AppendLine($"- Total Vulnerabilities Found: {vulns.Count}");
+        sb.AppendLine($"- Critical/High Risk Issues: {vulns.Count(v => v.Severity == "Critical" || v.Severity == "High")}");
+        
+        sb.AppendLine("\n## Regulatory Evidence Table");
+        sb.AppendLine();
+        sb.AppendLine("| ID | Severity | Zone | Package | Fix Available | Age (Days) |");
+        sb.AppendLine("|----|----------|------|---------|---------------|------------|");
         
         foreach (var v in vulns)
         {
-            sb.AppendLine($"| {v.Id} | {v.Severity} | {v.Package} | {v.FixAvailable} | {v.AgeInDays} |");
+            sb.AppendLine($"| {v.Id} | {v.Severity} | {v.ComponentZone} | {v.Package} | {v.FixAvailable} | {v.AgeInDays} |");
         }
 
-        File.WriteAllText("CRA_Compliance_Report.md", sb.ToString());
-        Console.WriteLine($"\n[AUDIT] Professional report saved to: {Path.GetFullPath("CRA_Compliance_Report.md")}");
+        string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CRA_Compliance_Report.md");
+        File.WriteAllText(fullPath, sb.ToString());
+        
+        Console.WriteLine($"\n[AUDIT] Professional report saved to: {fullPath}");
     }
 }

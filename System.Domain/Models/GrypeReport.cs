@@ -2,5 +2,6 @@
 
 public class GrypeReport
 {
+    
     public List<Vulnerability> Vulnerabilities { get; set; } = new();
 }

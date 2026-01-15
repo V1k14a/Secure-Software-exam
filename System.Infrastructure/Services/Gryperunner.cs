@@ -2,15 +2,21 @@
 using System.Text.Json;
 using System.Domain.Interfaces;
 using System.Domain.Models;
+using Microsoft.Extensions.Configuration;
 
-namespace System.Domain.Services;
+namespace System.Infrastructure.Services;
 
 public class GrypeRunner : IScanner
 {
+    private readonly string _syftPath;
+    private readonly string _grypePath;
     private const string SbomFile = "sbom.json";
-    
-    private readonly string _syftPath = @"C:\Users\ivan1\AppData\Local\Microsoft\WinGet\Packages\Anchore.Syft_Microsoft.Winget.Source_8wekyb3d8bbwe\syft.exe";
-    private readonly string _grypePath = @"C:\Users\ivan1\AppData\Local\Microsoft\WinGet\Packages\Anchore.Grype_Microsoft.Winget.Source_8wekyb3d8bbwe\grype.exe";
+
+    public GrypeRunner(IConfiguration config)
+    {
+        _syftPath = config["ScannerSettings:SyftPath"] ?? throw new ArgumentNullException("SyftPath missing in config");
+        _grypePath = config["ScannerSettings:GrypePath"] ?? throw new ArgumentNullException("GrypePath missing in config");
+    }
 
     public GrypeReport Scan(string path)
     {
@@ -21,9 +27,13 @@ public class GrypeRunner : IScanner
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WARN] Real scan failed or tools not found: {ex.Message}");
-            Console.WriteLine("[LOG] Falling back to Mock Data for demonstration...");
-            return new GrypeReport { Vulnerabilities = GetMockVulnerabilities().ToList() };
+            Console.WriteLine($"\n[!] REAL SCAN FAILED: {ex.Message}");
+            Console.WriteLine("[i] Using Mock Data for demonstration purposes...");
+            
+            return new GrypeReport 
+            { 
+                Vulnerabilities = GetMockVulnerabilities().ToList() 
+            };
         }
     }
 
@@ -39,28 +49,8 @@ public class GrypeRunner : IScanner
         var output = RunProcess(_grypePath, $"{SbomFile} -o json", true);
         return ParseGrypeOutput(output);
     }
-    
-    public IEnumerable<Vulnerability> GetMockVulnerabilities()
-    {
-        return new List<Vulnerability>
-        {
-            new Vulnerability { 
-                Id = "CVE-2024-001", 
-                Severity = "Critical", 
-                Package = "openssl", 
-                FixAvailable = true, 
-                FirstDiscovered = DateTime.Now.AddDays(-5) // 5 days old = SLA Violation!
-            },
-            new Vulnerability { 
-                Id = "CVE-2024-999", 
-                Severity = "Low", 
-                Package = "curl", 
-                FixAvailable = false, 
-                FirstDiscovered = DateTime.Now 
-            }
-        };
-    }
 
+    // FIXED: This method was incomplete in your snippet
     private string RunProcess(string fileName, string arguments, bool captureOutput = false)
     {
         var process = new Process
@@ -73,7 +63,6 @@ public class GrypeRunner : IScanner
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                // Ensures we look in the right place
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory 
             }
         };
@@ -107,10 +96,26 @@ public class GrypeRunner : IScanner
                 Id = vuln.GetProperty("id").GetString() ?? "UNKNOWN",
                 Severity = vuln.GetProperty("severity").GetString() ?? "Unknown",
                 Package = artifact.GetProperty("name").GetString() ?? "Unknown",
-                FixAvailable = vuln.TryGetProperty("fix", out _),
+                FixAvailable = vuln.TryGetProperty("fix", out var fixProp) && 
+                               fixProp.TryGetProperty("state", out var state) && 
+                               state.GetString() == "fixed",
                 FirstDiscovered = DateTime.Now 
             });
         }
         return report;
+    }
+
+    private IEnumerable<Vulnerability> GetMockVulnerabilities()
+    {
+        return new List<Vulnerability>
+        {
+            new Vulnerability { 
+                Id = "CVE-2026-TEST", 
+                Severity = "High", 
+                Package = "Microsoft.AspNetCore.Server.Kestrel", 
+                FixAvailable = true, 
+                FirstDiscovered = DateTime.Now.AddDays(-5) 
+            }
+        };
     }
 }
